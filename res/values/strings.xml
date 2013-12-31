@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">MireDroid</string>
+
+    <string name="miredo_daemon">miredo daemon</string>
+
+    <string name="miredo_service">miredo service</string>
+
+    <string name="uninstall">reset all</string>
+
+</resources>
