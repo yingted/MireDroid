@@ -88,7 +88,6 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, O
 		BootService.started.addObserver(this);
 		BootService.log.addObserver(mOther);
 		update(null, null);
-		BootService.d("**********************************************");
 	}
 
 	protected void onResume() {
@@ -107,8 +106,7 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, O
 	}
 
 	protected static final int STATE_DISABLED = 0, STATE_ENABLING = 1, STATE_ENABLED = 2, STATE_DISABLING = 3, STATE_UNINSTALLING = 4;
-	protected volatile int state = STATE_DISABLED; // XXX race condition on
-													// start
+	protected volatile int state = STATE_DISABLED; // XXX race on start
 
 	@Override
 	public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -136,8 +134,6 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, O
 
 	@Override
 	public void update(Observable observable, Object data) {
-		// BootService.d("start state=" + state + " start=" +
-		// BootService.isStarted() + " deny=" + BootService.wasDenied());
 		if (BootService.wasDenied())
 			state = BootService.isStarted() ? STATE_DISABLING : STATE_DISABLED;
 		else if (BootService.isStarted()) {
@@ -147,7 +143,6 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, O
 				state = STATE_ENABLED;
 		} else if (state != STATE_ENABLING && (state != STATE_UNINSTALLING))
 			state = STATE_DISABLED;
-		BootService.d("state=" + state);
 		if (isClickable)
 			runOnUiThread(this);
 	}

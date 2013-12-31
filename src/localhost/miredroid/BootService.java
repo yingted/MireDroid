@@ -22,7 +22,6 @@ import android.graphics.Color;
 import android.os.IBinder;
 import android.text.SpannableStringBuilder;
 import android.text.style.ForegroundColorSpan;
-import android.util.Log;
 
 public class BootService extends Service {
 	private static final class VolatileObservable extends Observable {
@@ -108,7 +107,6 @@ public class BootService extends Service {
 
 			@Override
 			public void interrupt() {
-				d("interrupt!", new Exception());
 				super.interrupt();
 				synchronized (mCloseables) {
 					for (Closeable c : mCloseables)
@@ -138,18 +136,14 @@ public class BootService extends Service {
 
 			@Override
 			public void run() {
-				// d("=============================================== run");
 				final File filesDir = getFilesDir();
-				if (!mUninstall && !new File(filesDir, "mkshrc").exists() || true) { // XXX
-					// debug
-					// d("start unpack");
-					final ZipInputStream zis = getZipInputStream();
+				if (!mUninstall && !new File(filesDir, "mkshrc").exists()) {
+					final ZipInputStream zis = new ZipInputStream(getResources().openRawResource(R.raw.miredo));
 					open(zis);
 					try {
 						try {
 							final byte[] buffer = new byte[1024];
 							for (ZipEntry ze; (ze = zis.getNextEntry()) != null;) {
-								// d("unpacking " + ze.getName());
 								final FileOutputStream fos = new FileOutputStream(new File(filesDir, ze.getName()));
 								open(fos);
 								try {
@@ -164,15 +158,12 @@ public class BootService extends Service {
 						}
 					} catch (IOException e) {
 						stopSelf();
-						d("install failed", e);
 						if (!Thread.interrupted())
 							e.printStackTrace();
 						return;
 					}
-					// d("end unpack");
 				}
 
-				d("===============================================");
 				try {
 					{
 						final Map<String, String> env = System.getenv();
@@ -194,18 +185,14 @@ public class BootService extends Service {
 					synchronized (BootService.this) {
 						(mExitThread = new Thread() {
 							public void run() {
-								d("su waitFor start");
 								try {
 									if (mSu.waitFor() == 0)
 										return;
 								} catch (InterruptedException e) {
-									d("prompt received");
 								} finally {
-									d("su waitFor end");
 								}
 								if (mPrompt != null)
 									return;
-								d("=====denied=====");
 								synchronized (started) {
 									mDenied = true;
 								}
@@ -223,30 +210,23 @@ public class BootService extends Service {
 						for (int i = 0; i < 2; ++i) {
 							final InputStream br = readers[i];
 							if (br == null) {
-								d("skipping closed " + (i == 0 ? "stderr" : "stdout"));
 								continue;
 							}
 							int avail, read = 0;
-							d("start nonblocking");
 							avail = br.available();
 							while (offsets[i] + avail >= buffers[i].length)
 								buffers[i] = Arrays.copyOf(buffers[i], buffers[i].length * 2);
 							if (avail > 0)
 								read = br.read(buffers[i], offsets[i], avail);
-							d("done nonblocking: {" + new String(buffers[i], 0, offsets[i]) + "}");
 							if (read < 0) {
 								readers[i] = null;
-								d("no more to read in " + (i == 0 ? "stderr" : "stdout"));
 								continue;
 							}
 							if (read > 0)
 								offsets[i] += read;
 							else if (!dirty && !prevDirty) { // read == 0
-								d("start blocking on " + (i == 0 ? "stderr" : "stdout"));
 								final int ch = br.read(); // blocking
-								d("stop blocking");
 								if (ch < 0) {
-									d("no more to read");
 									readers[i] = null;
 									continue; // process terminated; drain
 								}
@@ -258,7 +238,6 @@ public class BootService extends Service {
 								continue;
 							dirty = true;
 						}
-						// d("========dirty======== " + dirty);
 						if (prevDirty = dirty)
 							continue;
 						// all clean; need to update
@@ -272,7 +251,6 @@ public class BootService extends Service {
 							return; // we're done
 					}
 				} catch (IOException e) {
-					d("logging stopped", e);
 					if (!Thread.interrupted())
 						e.printStackTrace();
 				} finally {
@@ -281,7 +259,6 @@ public class BootService extends Service {
 				}
 			}
 		}).start();
-		d("super.onCreate");
 		super.onCreate();
 	}
 
@@ -307,7 +284,6 @@ public class BootService extends Service {
 	private static final int STATE_MIREDO = 3;
 
 	protected void update(StringBuilder stdout, StringBuilder stderr) throws IOException {
-		d("stdout={" + stdout + "}, stderr={" + stderr + "}, state=" + state);
 		assert lastTyped.length() == 0;
 		final boolean prompted = mPrompt != null && stderr.length() >= mPrompt.length()
 				&& mPrompt.contentEquals(stderr.subSequence(stderr.length() - mPrompt.length(), stderr.length()));
@@ -316,7 +292,6 @@ public class BootService extends Service {
 		// @formatter:off
 		switch (state) {
 		case   0:
-			d("load");
 			type(". \"$FILES_DIR\"/mkshrc\n");
 	++state;break;
 		case   1: // only state to touch stderr
@@ -333,13 +308,11 @@ public class BootService extends Service {
 			stderr.setLength(0);
 			appendPrompt();
 			if (mUninstall) {
-				d("uninstall");
 				mPrefs.edit().putInt("state", STATE_UNKNOWN);
 				type("uninstall\n");
 				state = 100;
 				break;
 			}
-			d("install");
 			final String cmd = "install '" + mPrefs.getString("relay", DEFAULT_RELAY).replace("'", "'\\''") + "'" + (mPrefs.getInt("state", STATE_UNKNOWN) == STATE_INSTALLED ? " --cached" : "") + "\n";
 			mPrefs.edit().putInt("state", STATE_UNKNOWN).commit();
 			type (cmd);
@@ -378,7 +351,6 @@ public class BootService extends Service {
 			append(stdout, SPAN_STDOUT);
 			appendPrompt();
 		}
-		d("emptied stdout, stderr: " + stdout.length() + ", " + stderr.length());
 		append(lastTyped, SPAN_STDIN);
 		lastTyped = "";
 	}
@@ -412,14 +384,11 @@ public class BootService extends Service {
 
 	@Override
 	public void onDestroy() {
-		d("onDestroy", new Exception());
 		synchronized (update) { // block out commands
 			synchronized (started) {
 				mStarted = false;
 				mUninstall = false;
-				// d("notifyObservers: " + started.countObservers());
 				started.notifyObservers();
-				d("send exit");
 				if (state == STATE_MIREDO)
 					try {
 						type("\n");
@@ -427,14 +396,11 @@ public class BootService extends Service {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-				d("interrupt");
 				mLogThread.interrupt();
-				d("interrupt 2");
 				synchronized (this) {
 					if (mExitThread != null)
 						mExitThread.interrupt();
 				}
-				d("destroy");
 				synchronized (this) {
 					if (mSu != null)
 						mSu.destroy();
@@ -443,33 +409,13 @@ public class BootService extends Service {
 		}
 		for (;;)
 			try {
-				d("waitFor");
 				mSu.waitFor();
-				d("join");
 				mLogThread.join();
-				d("join 2");
 				mExitThread.join();
 				break;
 			} catch (InterruptedException e) {
-				d("interrupt");
 			}
 		mDenied = false;
-		d("super.onDestroy");
 		super.onDestroy();
-	}
-
-	private final ZipInputStream getZipInputStream() {
-		return new ZipInputStream(getResources().openRawResource(R.raw.miredo));
-	}
-
-	public static void d(final String msg) {
-		Log.v("MireDroid", msg);
-	}
-
-	public static void d(final String msg, Throwable t) {
-		if (false)
-			Log.v("MireDroid", msg, t);
-		else
-			d(msg);
 	}
 }
